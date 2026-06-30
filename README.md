@@ -41,8 +41,23 @@ Runtime is **pure standard library** — Python 3.8+, no third-party packages.
 | `convert` | convert a whole image between `packed` and `mister` formats |
 | `build` | build a new image containing only selected saves |
 | `selftest` | round-trip validation (extract → rebuild → re-extract) |
-| `deploy-mister` | build one clean per-game save and scp it to a MiSTer |
-| `restore-mister` | deploy a whole `game → saves` map to a MiSTer |
+| `deploy-mister` | deploy one game's save to a MiSTer (full-memory by default) |
+| `restore-mister` | deploy a whole `game → saves` map to a MiSTer (full-memory) |
+
+### ⚠️ MiSTer gotchas (learned the hard way)
+
+1. **Deploy full-memory, not per-game.** By default cassini deploys the
+   **original BIOS-written memory image** (byte-spread) to each game's `.sav`.
+   Every game finds its own save and the real Saturn BIOS trusts the bytes.
+   The `--per-game` flag synthesizes a minimal per-game image — it round-trips
+   through cassini's own parser but **the real Saturn BIOS has rejected that
+   layout on hardware** (saves show up empty). Treat `--per-game` as
+   experimental until proven on hardware.
+
+2. **The core only reads a `.sav` at game MOUNT.** It does *not* hot-reload a
+   file you swap underneath a running game, and it can write its stale in-memory
+   copy *back over* your file on exit. To apply a deployed save:
+   **exit the Saturn core to the MiSTer main menu, then mount the game fresh.**
 
 ### The MiSTer restore map
 
@@ -90,8 +105,11 @@ Internal memory is 512 blocks of `0x40` bytes.
   `[0x04:0x40]` (each data block begins with a 4-byte `00 00 00 00` tag). The
   block list enumerates every data block and can itself span several blocks.
 
-The writer is validated by `selftest` and `tests/test_roundtrip.py`: extracting
-every save, rebuilding a fresh image, and re-extracting must be byte-identical.
+`selftest` and `tests/test_roundtrip.py` validate that the writer is
+**self-consistent** — extract → rebuild → re-extract is byte-identical. Note
+this proves cassini agrees with itself; it does **not** prove the real Saturn
+BIOS accepts a synthesized layout (it doesn't — see the MiSTer gotchas above).
+For deploys, full-memory images sidestep the writer entirely.
 
 ## Build the standalone apps
 

@@ -228,16 +228,25 @@ def _ssh(host, cmd):
                           capture_output=True, text=True)
 
 
-def deploy_mister(packed, save_ids, host, game, remote_dir, pad, date_tag, dry):
+def deploy_mister(packed, save_ids, host, game, remote_dir, pad, date_tag, dry, full=True):
     chosen = [s for s in parse_saves(packed) if s["name"] in save_ids]
     found = {s["name"] for s in chosen}
     missing = [i for i in save_ids if i not in found]
     if missing:
         print("  SKIP '%s': saves not in dump: %s" % (game, ", ".join(missing)))
         return
-    img = to_mister(build_image(chosen), pad=pad)
+    if full:
+        # PROVEN: deploy the original BIOS-written memory (all saves), byte-spread.
+        # Every game finds its own save; the real Saturn BIOS trusts these bytes.
+        img = to_mister(packed, pad=pad)
+        mode = "full-mem"
+    else:
+        # EXPERIMENTAL: synthesized per-game image. Round-trips through cassini's
+        # own parser but the real Saturn BIOS has rejected this layout on hardware.
+        img = to_mister(build_image(chosen), pad=pad)
+        mode = "per-game(EXPERIMENTAL - BIOS may reject)"
     remote = "%s/%s.sav" % (remote_dir.rstrip("/"), game)
-    print("%-55s <- %s  (%d save(s))" % (game, ",".join(save_ids), len(chosen)))
+    print("%-55s <- %s  [%s]" % (game, ",".join(save_ids), mode))
     if dry:
         return
     q = shlex.quote(remote)
@@ -317,9 +326,16 @@ def cmd_selftest(a):
     raise SystemExit(0 if selftest(load_packed(a.image)) else 1)
 
 
+MOUNT_NOTE = ("NOTE: the MiSTer Saturn core loads a .sav only at game MOUNT and "
+              "does not hot-reload it.\n      To see a deployed save: exit the core "
+              "to the main menu, then mount the game FRESH.")
+
+
 def cmd_deploy(a):
     deploy_mister(load_packed(a.image), a.saves, a.host, a.game,
-                  a.remote_dir, int(a.pad, 16), a.date, a.dry_run)
+                  a.remote_dir, int(a.pad, 16), a.date, a.dry_run, full=not a.per_game)
+    if not a.dry_run:
+        print(MOUNT_NOTE)
 
 
 def cmd_restore(a):
@@ -329,8 +345,11 @@ def cmd_restore(a):
     print("%s %d games to %s:%s\n" % (head, len(rows), a.host, a.remote_dir))
     for game, ids in rows:
         deploy_mister(packed, ids, a.host, game, a.remote_dir,
-                      int(a.pad, 16), a.date, a.dry_run)
-    print("\ndone." + ("" if a.dry_run else "  Backups saved as <game>.sav.bak-%s" % a.date))
+                      int(a.pad, 16), a.date, a.dry_run, full=not a.per_game)
+    if a.dry_run:
+        print("\ndone (dry run).")
+    else:
+        print("\ndone.  Backups saved as <game>.sav.bak-%s\n%s" % (a.date, MOUNT_NOTE))
 
 
 def main(argv=None):
@@ -369,15 +388,19 @@ def main(argv=None):
     s.add_argument("--game", required=True, help="MiSTer ROM name (no .sav)")
     s.add_argument("--remote-dir", default="/media/fat/saves/Saturn")
     s.add_argument("--pad", default="ff"); s.add_argument("--date", default="manual")
+    s.add_argument("--per-game", action="store_true",
+                   help="EXPERIMENTAL: synthesize a per-game image (BIOS may reject)")
     s.add_argument("--dry-run", action="store_true"); s.set_defaults(fn=cmd_deploy)
 
     s = sub.add_parser("restore-mister",
-                       help="deploy a whole game->saves map to a MiSTer")
+                       help="deploy a whole game->saves map to a MiSTer (full-memory)")
     s.add_argument("image"); s.add_argument("--map", required=True,
                                             help="TSV: '<ROM name>\\t<ID1,ID2>'")
     s.add_argument("--host", required=True)
     s.add_argument("--remote-dir", default="/media/fat/saves/Saturn")
     s.add_argument("--pad", default="ff"); s.add_argument("--date", default="manual")
+    s.add_argument("--per-game", action="store_true",
+                   help="EXPERIMENTAL: synthesize per-game images (BIOS may reject)")
     s.add_argument("--dry-run", action="store_true"); s.set_defaults(fn=cmd_restore)
 
     a = p.parse_args(argv)
