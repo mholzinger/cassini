@@ -1,0 +1,19 @@
+# cassini MiSTer restore map  (real Saturn internal save -> MiSTer ROM .sav name)
+# format: <MiSTer ROM name WITHOUT .sav><TAB><comma-separated internal save IDs>
+Alien Trilogy (USA)	ALIENTRILGY
+Policenauts_SegaSat_D1	POLICENAUTS
+Dead or Alive (Japan) (Rev A) (10M)	DOA_SS_FILE
+Panzer Dragoon Saga (USA) (Disc 1)	PANDRA_3_01,PANDRA_3_02
+Panzer Dragoon Saga (USA)	PANDRA_3_01,PANDRA_3_02
+Panzer Dragoon II Zwei (USA)	PANDRA_ZWEI
+NiGHTS into Dreams... (USA, Brazil)	NIGHTS___01,NIGHTS_XMAS
+NiGHTS into Dreams... (USA) (with 3D Control Pad) (RE)	NIGHTS___01,NIGHTS_XMAS
+Virtua Fighter Remix (USA)	VF_REMIX_01
+Virtual On - Cyber Troopers (USA)	VIRTUALONDA
+Quake (USA)	LOBOQUAKE__
+Resident Evil (USA)	BIOUDATA_SS,BIOUDATA_01
+Ai Iijima Interactive Video Clip - Good Island Cafe (Japan)	_AI_IIJIMA_
+Keiou Yuugekitai - Katsugeki-hen (Japan)	KEIO2______
+Keio Flying Squadron 2 (Europe)	KEIO2______
+Grandia English (J) (Disc 1) T-Eng v0.8.6 TrekkiesUnite118	GRANDIA_001,GRANDIA_002
+Grandia English (J) T-Eng v0.8.6 TrekkiesUnite118	GRANDIA_001,GRANDIA_002

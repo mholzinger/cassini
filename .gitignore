@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Saturn save dumps / extracted data (never commit private saves)
+*.BUP
+*.bup
+*.sav
+*.raw
+!examples/*.tsv
