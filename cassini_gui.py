@@ -2,8 +2,8 @@
 """cassini GUI - a simple cross-platform front end for the Saturn save relay.
 
 Pure standard library (Tkinter). Open a Saturn backup dump, inspect the
-saves inside it, extract them, convert formats, or deploy per-game saves
-straight to a MiSTer over SSH using a game->saves map.
+saves inside it, extract them, convert formats, or deploy the memory to a
+MiSTer over SSH by picking a game from a searchable list of your library.
 
 Dual-mode, like the intv2convert binary: run with arguments it behaves as
 the `cassini` CLI; run with no arguments it opens the GUI. Tkinter is
@@ -74,23 +74,90 @@ def launch_gui():
         def _deploy_tab(self, nb):
             f = ttk.Frame(nb, padding=6); nb.add(f, text="Deploy to MiSTer")
             row = ttk.Frame(f); row.pack(fill="x")
-            ttk.Label(row, text="SSH host:").pack(side="left")
+            ttk.Label(row, text="MiSTer SSH host:").pack(side="left")
             self.host = tk.StringVar(value="root@mister.local")
-            ttk.Entry(row, textvariable=self.host, width=26).pack(side="left", padx=6)
-            ttk.Label(row, text="Remote dir:").pack(side="left")
+            ttk.Entry(row, textvariable=self.host, width=22).pack(side="left", padx=6)
+            ttk.Button(row, text="Load games ↺", command=self.load_games).pack(side="left")
             self.rdir = tk.StringVar(value="/media/fat/saves/Saturn")
-            ttk.Entry(row, textvariable=self.rdir, width=26).pack(side="left", padx=6)
 
-            ttk.Label(f, text="Map  (one per line:  <MiSTer ROM name><TAB><ID1,ID2>):"
-                      ).pack(anchor="w", pady=(8, 2))
-            self.map_text = tk.Text(f, height=10, wrap="none", font=("Menlo", 11))
-            self.map_text.pack(fill="both", expand=True)
+            box = ttk.LabelFrame(f, text="Pick the game to deploy this save to", padding=8)
+            box.pack(fill="both", expand=True, pady=(10, 0))
+            sr = ttk.Frame(box); sr.pack(fill="x")
+            ttk.Label(sr, text="Search:").pack(side="left")
+            self.search = tk.StringVar()
+            se = ttk.Entry(sr, textvariable=self.search)
+            se.pack(side="left", fill="x", expand=True, padx=6)
+            se.bind("<KeyRelease>", lambda e: self._filter_games())
 
-            bar = ttk.Frame(f); bar.pack(fill="x", pady=6)
-            ttk.Button(bar, text="Load map…", command=self.load_map).pack(side="left")
-            ttk.Button(bar, text="Dry run",
-                       command=lambda: self.deploy(True)).pack(side="left", padx=6)
-            ttk.Button(bar, text="Deploy", command=lambda: self.deploy(False)).pack(side="left")
+            lb = ttk.Frame(box); lb.pack(fill="both", expand=True, pady=6)
+            self.games_lb = tk.Listbox(lb, height=9, activestyle="dotbox")
+            self.games_lb.pack(side="left", fill="both", expand=True)
+            sb = ttk.Scrollbar(lb, command=self.games_lb.yview); sb.pack(side="left", fill="y")
+            self.games_lb.config(yscrollcommand=sb.set)
+            self.games_lb.bind("<Double-Button-1>", lambda e: self.deploy_single())
+
+            br = ttk.Frame(box); br.pack(fill="x")
+            ttk.Button(br, text="Deploy to selected game",
+                       command=self.deploy_single).pack(side="left")
+            ttk.Label(br, text="  no list? just type the exact ROM name above and Deploy "
+                      "uses that.", foreground="#888").pack(side="left")
+            ttk.Label(box, text="Writes the whole memory to that one .sav (the game finds "
+                      "its own save). After deploying: on the MiSTer exit the core to the "
+                      "main menu, then mount the game FRESH.", foreground="#888",
+                      wraplength=760, justify="left").pack(anchor="w", pady=(4, 0))
+            self.all_games = []
+
+        def load_games(self):
+            self._say("loading Saturn games from %s ..." % self.host.get())
+
+            def work():
+                try:
+                    self.all_games = eng.list_mister_games(self.host.get(), self.rdir.get())
+                    self._say("loaded %d games from the MiSTer" % len(self.all_games))
+                    self.after(0, self._filter_games)
+                except Exception as e:
+                    self._say("ERROR loading games: %s" % e)
+            threading.Thread(target=work, daemon=True).start()
+
+        def _filter_games(self):
+            q = self.search.get().strip().lower()
+            self.games_lb.delete(0, "end")
+            for g in self.all_games:
+                if q in g.lower():
+                    self.games_lb.insert("end", g)
+
+        def _target_game(self):
+            sel = self.games_lb.curselection()
+            if sel:
+                return self.games_lb.get(sel[0])
+            return self.search.get().strip().removesuffix(".sav")
+
+        def deploy_single(self):
+            if not self._need_dump():
+                return
+            game = self._target_game()
+            if not game:
+                messagebox.showinfo("cassini",
+                                    "Select a game, or type its ROM name in Search.")
+                return
+            if not messagebox.askyesno(
+                    "cassini", "Deploy this dump to:\n   %s.sav\non %s?\n\n"
+                    "The existing file is backed up first." % (game, self.host.get())):
+                return
+            ids = [s["name"] for s in eng.parse_saves(self.packed)]
+            threading.Thread(target=self._single_worker, args=(game, ids),
+                             daemon=True).start()
+
+        def _single_worker(self, game, ids):
+            self._say("deploying dump -> %s.sav on %s ..." % (game, self.host.get()))
+            try:
+                eng.deploy_mister(self.packed, ids, self.host.get(), game,
+                                  self.rdir.get(), 0xFF, "gui", False, True)
+                self._say("done: %s.sav written and md5-verified" % game)
+                self._say("REMEMBER on the MiSTer: exit the core to the main menu, then "
+                          "mount the game FRESH so it reloads the save.")
+            except Exception as e:
+                self._say("ERROR: %s" % e)
 
         # ---- helpers --------------------------------------------------
         def _say(self, msg):
@@ -160,52 +227,13 @@ def launch_gui():
             open(out, "wb").write(data)
             self._say("wrote %s (%d bytes, %s)" % (out, len(data), to))
 
-        def load_map(self):
-            path = filedialog.askopenfilename(
-                title="Open map (.tsv)",
-                filetypes=[("TSV map", "*.tsv *.txt"), ("All", "*.*")])
-            if path:
-                self.map_text.delete("1.0", "end")
-                self.map_text.insert("1.0", open(path, encoding="utf-8").read())
-
-        def deploy(self, dry):
-            if not self._need_dump():
-                return
-            rows = []
-            for line in self.map_text.get("1.0", "end").splitlines():
-                if not line.strip() or line.lstrip().startswith("#") or "\t" not in line:
-                    continue
-                game, ids = line.split("\t", 1)
-                rows.append((game.strip(), [x.strip() for x in ids.split(",") if x.strip()]))
-            if not rows:
-                messagebox.showinfo("cassini", "Map is empty (need <name><TAB><IDs>)."); return
-            if not dry and not messagebox.askyesno(
-                    "cassini", "Deploy %d game saves to %s?\nExisting files are backed up first."
-                    % (len(rows), self.host.get())):
-                return
-            threading.Thread(target=self._deploy_worker, args=(rows, dry),
-                             daemon=True).start()
-
-        def _deploy_worker(self, rows, dry):
-            host, rdir = self.host.get(), self.rdir.get()
-            self._say("%s %d game(s) -> %s" % ("DRY-RUN" if dry else "Deploying",
-                                               len(rows), host))
-            for game, ids in rows:
-                try:
-                    chosen = [s for s in eng.parse_saves(self.packed) if s["name"] in ids]
-                    if len(chosen) != len(set(ids)):
-                        self._say("  SKIP %s (missing saves)" % game); continue
-                    if dry:
-                        self._say("  would deploy %s <- %s" % (game, ",".join(ids))); continue
-                    eng.deploy_mister(self.packed, ids, host, game, rdir, 0xFF, "gui", False)
-                    self._say("  deployed %s" % game)
-                except Exception as e:
-                    self._say("  ERROR %s: %s" % (game, e))
-            self._say("done.")
-
     root = tk.Tk()
     try:
-        ttk.Style().theme_use("clam")
+        # macOS renders correctly only with its native 'aqua' theme; forcing
+        # 'clam' there paints widgets invisible. 'clam' does look better than
+        # the dated default on Linux/Windows, so use it only off-macOS.
+        if sys.platform != "darwin":
+            ttk.Style().theme_use("clam")
     except tk.TclError:
         pass
     App(root)

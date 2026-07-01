@@ -6,6 +6,7 @@ __pycache__/
 build/
 dist/
 *.spec
+.build-venv/
 
 # Saturn save dumps / extracted data (never commit private saves)
 *.BUP

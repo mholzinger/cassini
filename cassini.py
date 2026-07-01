@@ -228,6 +228,37 @@ def _ssh(host, cmd):
                           capture_output=True, text=True)
 
 
+SAT_ROM_EXTS = ("cue", "chd", "m3u", "ccd", "iso")
+_GAME_ROOTS = ("/media/fat/games", "/media/usb0", "/media/usb1", "/media/usb2",
+               "/media/usb3", "/media/network", "/media/cifs")
+
+
+def list_mister_games(host, saves_dir="/media/fat/saves/Saturn", roots=_GAME_ROOTS):
+    """Candidate .sav base-names on a MiSTer: existing (flat) saves PLUS every
+    Saturn ROM found by recursively scanning the game roots. A game's save is
+    named after the ROM file it was launched from, so ROM base-names are the
+    valid deploy targets even for games never saved in yet."""
+    exts = " -o ".join("-iname '*.%s'" % e for e in SAT_ROM_EXTS)
+    rootlist = " ".join(shlex.quote(r) for r in roots)
+    cmd = (
+        "ls -1 %s/*.sav 2>/dev/null; "
+        "for r in %s; do find \"$r\" -maxdepth 3 -type d -iname saturn 2>/dev/null; done "
+        "| while read d; do find \"$d\" -type f \\( %s \\) 2>/dev/null; done"
+        % (shlex.quote(saves_dir), rootlist, exts)
+    )
+    known = {"sav"} | set(SAT_ROM_EXTS)
+    names = set()
+    for line in _ssh(host, cmd).stdout.splitlines():
+        base = line.strip().rsplit("/", 1)[-1]
+        if "." in base:
+            stem, ext = base.rsplit(".", 1)
+            if ext.lower() in known:
+                base = stem
+        if base and base != "boot" and "(Track " not in base:
+            names.add(base)
+    return sorted(names)
+
+
 def deploy_mister(packed, save_ids, host, game, remote_dir, pad, date_tag, dry, full=True):
     chosen = [s for s in parse_saves(packed) if s["name"] in save_ids]
     found = {s["name"] for s in chosen}
