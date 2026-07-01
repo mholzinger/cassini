@@ -27,18 +27,6 @@ MiSTer, per game, safely** — automatic on-device backups, `md5` verification,
 and a picker that reads your installed ROMs straight off the device so you never
 have to hand-type a filename.
 
-<details>
-<summary><b>The origin story</b> (why this tool is named after a space probe)</summary>
-
-A ~30 KB file called `SATBACKUP.BUP`, made with a Pseudo Saturn Kai cart and
-forgotten on a MODE ODE's microSD for three years, held 28 saves from a real
-Sega Saturn — including 27½ hours of *Grandia*. It wasn't on the NAS; it wasn't
-anywhere obvious. Finding it (by content signature, not filename), decoding the
-Saturn BIOS backup-RAM block format, converting it to the MiSTer's byte-spread
-layout, and getting it to boot on real hardware became this tool. Like the
-Cassini probe: pull the data off Saturn, relay it home.
-</details>
-
 ## Download
 
 Grab the latest build for your OS from **[Releases](../../releases/latest)**:
