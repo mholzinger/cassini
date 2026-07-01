@@ -17,6 +17,8 @@ home, **cassini** reads a real-hardware backup-RAM dump (a **Pseudo Saturn Kai**
 searchable list of your installed library. GUI *or* CLI, no third-party
 dependencies.
 
+<p align="center"><img src="docs/cassini-gui.png" alt="cassini GUI — the Saves tab listing a rescued dump" width="640"></p>
+
 ## Why it exists
 
 Plenty of tools already *convert* Saturn save formats (see [Credits](#credits)).
